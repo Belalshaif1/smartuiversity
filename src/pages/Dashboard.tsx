@@ -14,8 +14,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Building2, BookOpen, FileText, GraduationCap, BarChart3, 
-  Plus, Trash2, Edit, Megaphone, Briefcase, Users, DollarSign 
+  Plus, Trash2, Edit, Megaphone, Briefcase, Users, DollarSign, UserCog 
 } from 'lucide-react';
+import AdminManagement from '@/components/dashboard/AdminManagement';
 
 const Dashboard: React.FC = () => {
   const { t, language } = useLanguage();
@@ -280,6 +281,7 @@ const Dashboard: React.FC = () => {
           <TabsTrigger value="graduates"><GraduationCap className="h-4 w-4 me-1" />{t('nav.graduates')}</TabsTrigger>
           <TabsTrigger value="research"><FileText className="h-4 w-4 me-1" />{t('nav.research')}</TabsTrigger>
           {(role === 'super_admin' || role === 'university_admin') && <TabsTrigger value="fees"><DollarSign className="h-4 w-4 me-1" />{t('nav.fees')}</TabsTrigger>}
+          {(role === 'super_admin' || role === 'university_admin' || role === 'college_admin') && <TabsTrigger value="admins"><UserCog className="h-4 w-4 me-1" />{t('dashboard.manage_admins')}</TabsTrigger>}
         </TabsList>
 
         {/* Universities */}
@@ -394,6 +396,13 @@ const Dashboard: React.FC = () => {
             <Button onClick={() => openAdd('fee')} className="bg-gold text-gold-foreground"><Plus className="h-4 w-4 me-1" />{t('common.add')}</Button>
           </div>
         </TabsContent>
+
+        {/* Admins */}
+        {(role === 'super_admin' || role === 'university_admin' || role === 'college_admin') && (
+          <TabsContent value="admins">
+            <AdminManagement universities={universities} colleges={colleges} departments={departments} />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Add/Edit Dialog */}
