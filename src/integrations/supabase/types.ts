@@ -494,6 +494,7 @@ export type Database = {
           created_at: string
           department_id: string | null
           id: string
+          is_active: boolean
           role: Database["public"]["Enums"]["app_role"]
           university_id: string | null
           user_id: string
@@ -503,6 +504,7 @@ export type Database = {
           created_at?: string
           department_id?: string | null
           id?: string
+          is_active?: boolean
           role: Database["public"]["Enums"]["app_role"]
           university_id?: string | null
           user_id: string
@@ -512,6 +514,7 @@ export type Database = {
           created_at?: string
           department_id?: string | null
           id?: string
+          is_active?: boolean
           role?: Database["public"]["Enums"]["app_role"]
           university_id?: string | null
           user_id?: string
