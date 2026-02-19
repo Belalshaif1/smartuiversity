@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { User } from 'lucide-react';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { User, Camera, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const Profile: React.FC = () => {
@@ -16,6 +17,51 @@ const Profile: React.FC = () => {
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [phone, setPhone] = useState(profile?.phone || '');
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({ title: language === 'ar' ? 'يرجى اختيار صورة' : 'Please select an image', variant: 'destructive' });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: language === 'ar' ? 'حجم الصورة يجب أن يكون أقل من 2MB' : 'Image must be less than 2MB', variant: 'destructive' });
+      return;
+    }
+
+    setUploading(true);
+    const ext = file.name.split('.').pop();
+    const filePath = `${user.id}/avatar.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, file, { upsert: true });
+
+    if (uploadError) {
+      toast({ title: uploadError.message, variant: 'destructive' });
+      setUploading(false);
+      return;
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath);
+
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ avatar_url: publicUrl })
+      .eq('user_id', user.id);
+
+    if (updateError) {
+      toast({ title: updateError.message, variant: 'destructive' });
+    } else {
+      toast({ title: language === 'ar' ? 'تم تحديث الصورة' : 'Avatar updated' });
+      refreshProfile();
+    }
+    setUploading(false);
+  };
 
   const handleSave = async () => {
     if (!user) return;
@@ -36,12 +82,25 @@ const Profile: React.FC = () => {
       : userRole.role.replace('_', ' ')
   ) : (language === 'ar' ? 'مستخدم' : 'User');
 
+  const initials = profile?.full_name?.charAt(0)?.toUpperCase() || user?.email?.charAt(0)?.toUpperCase() || 'U';
+
   return (
     <div className="container mx-auto max-w-lg px-4 py-8 animate-fade-in">
       <Card>
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-primary">
-            <User className="h-10 w-10 text-gold" />
+          <div className="relative mx-auto mb-4">
+            <Avatar className="h-24 w-24 mx-auto">
+              {profile?.avatar_url && <AvatarImage src={profile.avatar_url} alt="avatar" />}
+              <AvatarFallback className="bg-primary text-primary-foreground text-2xl">{initials}</AvatarFallback>
+            </Avatar>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="absolute bottom-0 right-1/2 translate-x-6 translate-y-1 flex h-8 w-8 items-center justify-center rounded-full bg-gold text-gold-foreground shadow-md hover:opacity-90 transition-opacity"
+            >
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+            </button>
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
           </div>
           <CardTitle>{t('nav.profile')}</CardTitle>
           <p className="text-sm text-gold font-semibold">{roleLabel}</p>

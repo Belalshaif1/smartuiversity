@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
@@ -23,7 +23,7 @@ const Dashboard: React.FC = () => {
   const { user, userRole, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [stats, setStats] = useState({ universities: 0, colleges: 0, departments: 0, graduates: 0, research: 0 });
+  const [stats, setStats] = useState({ universities: 0, colleges: 0, departments: 0, graduates: 0, research: 0, users: 0 });
   const [universities, setUniversities] = useState<any[]>([]);
   const [colleges, setColleges] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
@@ -44,37 +44,43 @@ const Dashboard: React.FC = () => {
     if (!user || !userRole) return;
     const role = userRole.role;
 
+    // Fetch user count (profiles count)
+    const usersCount = supabase.from('profiles').select('id', { count: 'exact', head: true });
+
     if (role === 'super_admin') {
-      const [u, c, d, g, r] = await Promise.all([
+      const [u, c, d, g, r, usersRes] = await Promise.all([
         supabase.from('universities').select('*'),
         supabase.from('colleges').select('*, universities(name_ar, name_en)'),
         supabase.from('departments').select('*, colleges(name_ar, name_en)'),
         supabase.from('graduates').select('id', { count: 'exact', head: true }),
         supabase.from('research').select('id', { count: 'exact', head: true }),
+        usersCount,
       ]);
       setUniversities(u.data || []);
       setColleges(c.data || []);
       setDepartments(d.data || []);
-      setStats({ universities: (u.data || []).length, colleges: (c.data || []).length, departments: (d.data || []).length, graduates: g.count || 0, research: r.count || 0 });
+      setStats({ universities: (u.data || []).length, colleges: (c.data || []).length, departments: (d.data || []).length, graduates: g.count || 0, research: r.count || 0, users: usersRes.count || 0 });
     } else if (role === 'university_admin') {
       const uid = userRole.university_id;
-      const [c, d, g, r] = await Promise.all([
+      const [c, d, g, r, usersRes] = await Promise.all([
         supabase.from('colleges').select('*').eq('university_id', uid),
         supabase.from('departments').select('*, colleges(name_ar, name_en)').eq('colleges.university_id', uid),
         supabase.from('graduates').select('id', { count: 'exact', head: true }),
         supabase.from('research').select('id', { count: 'exact', head: true }),
+        usersCount,
       ]);
       setColleges(c.data || []);
       setDepartments(d.data || []);
-      setStats({ universities: 1, colleges: (c.data || []).length, departments: (d.data || []).length, graduates: g.count || 0, research: r.count || 0 });
+      setStats({ universities: 1, colleges: (c.data || []).length, departments: (d.data || []).length, graduates: g.count || 0, research: r.count || 0, users: usersRes.count || 0 });
     } else if (role === 'college_admin') {
-      const [d, g, r] = await Promise.all([
+      const [d, g, r, usersRes] = await Promise.all([
         supabase.from('departments').select('*').eq('college_id', userRole.college_id),
         supabase.from('graduates').select('id', { count: 'exact', head: true }),
         supabase.from('research').select('id', { count: 'exact', head: true }),
+        usersCount,
       ]);
       setDepartments(d.data || []);
-      setStats({ universities: 0, colleges: 1, departments: (d.data || []).length, graduates: g.count || 0, research: r.count || 0 });
+      setStats({ universities: 0, colleges: 1, departments: (d.data || []).length, graduates: g.count || 0, research: r.count || 0, users: usersRes.count || 0 });
     }
   };
 
@@ -173,11 +179,12 @@ const Dashboard: React.FC = () => {
   if (!user || !userRole) return null;
 
   const statCards = [
-    { key: 'universities', icon: Building2, show: role === 'super_admin' },
-    { key: 'colleges', icon: BookOpen, show: role !== 'department_admin' },
-    { key: 'departments', icon: FileText, show: true },
-    { key: 'graduates', icon: GraduationCap, show: true },
-    { key: 'research', icon: FileText, show: true },
+    { key: 'users', icon: Users, label: language === 'ar' ? 'المستخدمين' : 'Users', show: role === 'super_admin' || role === 'university_admin' || role === 'college_admin' },
+    { key: 'universities', icon: Building2, label: t('home.stats.universities'), show: role === 'super_admin' },
+    { key: 'colleges', icon: BookOpen, label: t('home.stats.colleges'), show: role !== 'department_admin' },
+    { key: 'departments', icon: FileText, label: t('home.stats.departments'), show: true },
+    { key: 'graduates', icon: GraduationCap, label: t('home.stats.graduates'), show: true },
+    { key: 'research', icon: FileText, label: t('home.stats.research'), show: true },
   ].filter(s => s.show);
 
   const renderForm = () => {
@@ -258,13 +265,13 @@ const Dashboard: React.FC = () => {
       </p>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 mb-8 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 mb-8 md:grid-cols-3 lg:grid-cols-6">
         {statCards.map(s => (
           <Card key={s.key}>
             <CardContent className="flex flex-col items-center p-4 text-center">
               <s.icon className="mb-2 h-6 w-6 text-gold" />
               <span className="text-2xl font-bold">{stats[s.key as keyof typeof stats]}</span>
-              <span className="text-xs text-muted-foreground">{t(`home.stats.${s.key}`)}</span>
+              <span className="text-xs text-muted-foreground">{s.label}</span>
             </CardContent>
           </Card>
         ))}
