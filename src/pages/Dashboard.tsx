@@ -14,9 +14,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { 
   Building2, BookOpen, FileText, GraduationCap, BarChart3, 
-  Plus, Trash2, Edit, Megaphone, Briefcase, Users, DollarSign, UserCog 
+  Plus, Trash2, Edit, Megaphone, Briefcase, Users, DollarSign, UserCog, Shield 
 } from 'lucide-react';
 import AdminManagement from '@/components/dashboard/AdminManagement';
+import UserManagementTable from '@/components/dashboard/UserManagementTable';
+import RolePermissions from '@/components/dashboard/RolePermissions';
 
 const Dashboard: React.FC = () => {
   const { t, language } = useLanguage();
@@ -278,8 +280,11 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Management Tabs */}
-      <Tabs defaultValue={role === 'super_admin' ? 'universities' : role === 'university_admin' ? 'colleges' : role === 'college_admin' ? 'departments' : 'research'}>
+      <Tabs defaultValue="users">
         <TabsList className="flex flex-wrap gap-1 h-auto mb-6">
+          {(role === 'super_admin' || role === 'university_admin' || role === 'college_admin') && <TabsTrigger value="users"><Users className="h-4 w-4 me-1" />{language === 'ar' ? 'إدارة المستخدمين' : 'User Management'}</TabsTrigger>}
+          {(role === 'super_admin' || role === 'university_admin' || role === 'college_admin') && <TabsTrigger value="admins"><UserCog className="h-4 w-4 me-1" />{t('dashboard.manage_admins')}</TabsTrigger>}
+          {role === 'super_admin' && <TabsTrigger value="permissions"><Shield className="h-4 w-4 me-1" />{language === 'ar' ? 'الأدوار والصلاحيات' : 'Roles & Permissions'}</TabsTrigger>}
           {role === 'super_admin' && <TabsTrigger value="universities"><Building2 className="h-4 w-4 me-1" />{t('nav.universities')}</TabsTrigger>}
           {(role === 'super_admin' || role === 'university_admin') && <TabsTrigger value="colleges"><BookOpen className="h-4 w-4 me-1" />{t('universities.colleges')}</TabsTrigger>}
           {(role !== 'department_admin') && <TabsTrigger value="departments"><FileText className="h-4 w-4 me-1" />{t('universities.departments')}</TabsTrigger>}
@@ -288,8 +293,31 @@ const Dashboard: React.FC = () => {
           <TabsTrigger value="graduates"><GraduationCap className="h-4 w-4 me-1" />{t('nav.graduates')}</TabsTrigger>
           <TabsTrigger value="research"><FileText className="h-4 w-4 me-1" />{t('nav.research')}</TabsTrigger>
           {(role === 'super_admin' || role === 'university_admin') && <TabsTrigger value="fees"><DollarSign className="h-4 w-4 me-1" />{t('nav.fees')}</TabsTrigger>}
-          {(role === 'super_admin' || role === 'university_admin' || role === 'college_admin') && <TabsTrigger value="admins"><UserCog className="h-4 w-4 me-1" />{t('dashboard.manage_admins')}</TabsTrigger>}
         </TabsList>
+
+        {/* User Management */}
+        {(role === 'super_admin' || role === 'university_admin' || role === 'college_admin') && (
+          <TabsContent value="users">
+            <UserManagementTable onAddAdmin={() => {
+              const adminsTab = document.querySelector('[data-value="admins"]') as HTMLElement;
+              adminsTab?.click();
+            }} />
+          </TabsContent>
+        )}
+
+        {/* Admins */}
+        {(role === 'super_admin' || role === 'university_admin' || role === 'college_admin') && (
+          <TabsContent value="admins">
+            <AdminManagement universities={universities} colleges={colleges} departments={departments} />
+          </TabsContent>
+        )}
+
+        {/* Roles & Permissions */}
+        {role === 'super_admin' && (
+          <TabsContent value="permissions">
+            <RolePermissions />
+          </TabsContent>
+        )}
 
         {/* Universities */}
         {role === 'super_admin' && (
@@ -404,12 +432,6 @@ const Dashboard: React.FC = () => {
           </div>
         </TabsContent>
 
-        {/* Admins */}
-        {(role === 'super_admin' || role === 'university_admin' || role === 'college_admin') && (
-          <TabsContent value="admins">
-            <AdminManagement universities={universities} colleges={colleges} departments={departments} />
-          </TabsContent>
-        )}
       </Tabs>
 
       {/* Add/Edit Dialog */}
