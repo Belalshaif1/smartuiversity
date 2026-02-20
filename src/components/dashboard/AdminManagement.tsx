@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Shield, ShieldOff, KeyRound, UserCog } from 'lucide-react';
+import { Plus, Shield, ShieldOff, KeyRound, UserCog, Trash2, Edit } from 'lucide-react';
 
 interface AdminRole {
   id: string;
@@ -31,23 +31,27 @@ interface Props {
 
 const AdminManagement: React.FC<Props> = ({ universities, colleges, departments }) => {
   const { language } = useLanguage();
-  const { user, userRole, session } = useAuth();
+  const { user, userRole } = useAuth();
   const { toast } = useToast();
   const [admins, setAdmins] = useState<AdminRole[]>([]);
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [passwordDialog, setPasswordDialog] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
+  const [editingAdmin, setEditingAdmin] = useState<AdminRole | null>(null);
   const [form, setForm] = useState({
     email: '', password: '', full_name: '', role: '',
     university_id: '', college_id: '', department_id: '',
+  });
+  const [editForm, setEditForm] = useState({
+    role: '', university_id: '', college_id: '', department_id: '',
   });
 
   const isAr = language === 'ar';
   const role = userRole?.role;
 
   const fetchAdmins = async () => {
-    // Fetch roles with profile join using user_id
     const { data } = await supabase
       .from('user_roles')
       .select('id, user_id, role, university_id, college_id, department_id, is_active')
@@ -55,7 +59,6 @@ const AdminManagement: React.FC<Props> = ({ universities, colleges, departments 
       .order('created_at', { ascending: false });
     
     if (data) {
-      // Fetch profiles for these users
       const userIds = data.map(d => d.user_id);
       const { data: profiles } = await supabase
         .from('profiles')
@@ -76,9 +79,7 @@ const AdminManagement: React.FC<Props> = ({ universities, colleges, departments 
   }, [user, userRole]);
 
   const callEdgeFunction = async (body: any) => {
-    const response = await supabase.functions.invoke('manage-admin', {
-      body,
-    });
+    const response = await supabase.functions.invoke('manage-admin', { body });
     if (response.error) throw new Error(response.error.message);
     if (response.data?.error) throw new Error(response.data.error);
     return response.data;
@@ -92,11 +93,8 @@ const AdminManagement: React.FC<Props> = ({ universities, colleges, departments 
     setLoading(true);
     try {
       await callEdgeFunction({
-        action: 'create',
-        email: form.email,
-        password: form.password,
-        full_name: form.full_name,
-        role: form.role,
+        action: 'create', email: form.email, password: form.password,
+        full_name: form.full_name, role: form.role,
         university_id: form.university_id || null,
         college_id: form.college_id || null,
         department_id: form.department_id || null,
@@ -119,6 +117,48 @@ const AdminManagement: React.FC<Props> = ({ universities, colleges, departments 
     } catch (err: any) {
       toast({ title: err.message, variant: 'destructive' });
     }
+  };
+
+  const handleDelete = async (roleId: string) => {
+    if (!confirm(isAr ? 'هل أنت متأكد من حذف هذا المدير؟' : 'Are you sure you want to delete this admin?')) return;
+    try {
+      await callEdgeFunction({ action: 'delete_user', role_id: roleId });
+      toast({ title: isAr ? 'تم حذف المدير' : 'Admin deleted' });
+      fetchAdmins();
+    } catch (err: any) {
+      toast({ title: err.message, variant: 'destructive' });
+    }
+  };
+
+  const openEditDialog = (admin: AdminRole) => {
+    setEditingAdmin(admin);
+    setEditForm({
+      role: admin.role,
+      university_id: admin.university_id || '',
+      college_id: admin.college_id || '',
+      department_id: admin.department_id || '',
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!editingAdmin || !editForm.role) return;
+    setLoading(true);
+    try {
+      await callEdgeFunction({
+        action: 'update_role', role_id: editingAdmin.id, role: editForm.role,
+        university_id: editForm.university_id || null,
+        college_id: editForm.college_id || null,
+        department_id: editForm.department_id || null,
+      });
+      toast({ title: isAr ? 'تم تعديل الدور بنجاح' : 'Role updated successfully' });
+      setEditDialogOpen(false);
+      setEditingAdmin(null);
+      fetchAdmins();
+    } catch (err: any) {
+      toast({ title: err.message, variant: 'destructive' });
+    }
+    setLoading(false);
   };
 
   const handleChangePassword = async () => {
@@ -162,7 +202,6 @@ const AdminManagement: React.FC<Props> = ({ universities, colleges, departments 
     return '';
   };
 
-  // Available roles based on caller
   const availableRoles = () => {
     if (role === 'super_admin') return ['university_admin', 'college_admin', 'department_admin'];
     if (role === 'university_admin') return ['college_admin', 'department_admin'];
@@ -170,23 +209,66 @@ const AdminManagement: React.FC<Props> = ({ universities, colleges, departments 
     return [];
   };
 
-  // Filter entities based on selected role
-  const filteredColleges = form.university_id
-    ? colleges.filter(c => c.university_id === form.university_id)
-    : colleges;
+  const filteredColleges = form.university_id ? colleges.filter(c => c.university_id === form.university_id) : colleges;
+  const filteredDepartments = form.college_id ? departments.filter(d => d.college_id === form.college_id) : departments;
+  const editFilteredColleges = editForm.university_id ? colleges.filter(c => c.university_id === editForm.university_id) : colleges;
+  const editFilteredDepartments = editForm.college_id ? departments.filter(d => d.college_id === editForm.college_id) : departments;
 
-  const filteredDepartments = form.college_id
-    ? departments.filter(d => d.college_id === form.college_id)
-    : departments;
+  const renderRoleFields = (formState: any, setFormState: (v: any) => void, filtColleges: any[], filtDepts: any[]) => (
+    <>
+      <div className="space-y-1">
+        <Label>{isAr ? 'الدور' : 'Role'} *</Label>
+        <Select value={formState.role} onValueChange={v => setFormState({ ...formState, role: v, university_id: '', college_id: '', department_id: '' })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {availableRoles().map(r => <SelectItem key={r} value={r}>{getRoleName(r)}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      {(formState.role === 'university_admin' || formState.role === 'college_admin' || formState.role === 'department_admin') && role === 'super_admin' && (
+        <div className="space-y-1">
+          <Label>{isAr ? 'الجامعة' : 'University'}</Label>
+          <Select value={formState.university_id} onValueChange={v => setFormState({ ...formState, university_id: v, college_id: '', department_id: '' })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {universities.map(u => <SelectItem key={u.id} value={u.id}>{isAr ? u.name_ar : (u.name_en || u.name_ar)}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      {(formState.role === 'college_admin' || formState.role === 'department_admin') && (
+        <div className="space-y-1">
+          <Label>{isAr ? 'الكلية' : 'College'}</Label>
+          <Select value={formState.college_id} onValueChange={v => setFormState({ ...formState, college_id: v, department_id: '' })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {filtColleges.map(c => <SelectItem key={c.id} value={c.id}>{isAr ? c.name_ar : (c.name_en || c.name_ar)}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      {formState.role === 'department_admin' && (
+        <div className="space-y-1">
+          <Label>{isAr ? 'القسم' : 'Department'}</Label>
+          <Select value={formState.department_id} onValueChange={v => setFormState({ ...formState, department_id: v })}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {filtDepts.map(d => <SelectItem key={d.id} value={d.id}>{isAr ? d.name_ar : (d.name_en || d.name_ar)}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+    </>
+  );
 
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold flex items-center gap-2">
-          <UserCog className="h-5 w-5 text-gold" />
+          <UserCog className="h-5 w-5 text-accent" />
           {isAr ? 'إدارة المدراء' : 'Manage Admins'}
         </h2>
-        <Button onClick={() => setDialogOpen(true)} className="bg-gold text-gold-foreground">
+        <Button onClick={() => setDialogOpen(true)} className="bg-accent text-accent-foreground">
           <Plus className="h-4 w-4 me-1" />
           {isAr ? 'إضافة مدير' : 'Add Admin'}
         </Button>
@@ -212,21 +294,20 @@ const AdminManagement: React.FC<Props> = ({ universities, colleges, departments 
                   )}
                 </div>
                 <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleToggle(admin.id, admin.is_active)}
-                    title={admin.is_active ? (isAr ? 'إيقاف' : 'Deactivate') : (isAr ? 'تفعيل' : 'Activate')}
-                  >
+                  <Button variant="ghost" size="icon" onClick={() => openEditDialog(admin)} title={isAr ? 'تعديل' : 'Edit'}>
+                    <Edit className="h-4 w-4 text-primary" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleToggle(admin.id, admin.is_active)}
+                    title={admin.is_active ? (isAr ? 'إيقاف' : 'Deactivate') : (isAr ? 'تفعيل' : 'Activate')}>
                     {admin.is_active ? <ShieldOff className="h-4 w-4 text-destructive" /> : <Shield className="h-4 w-4 text-green-600" />}
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => { setPasswordDialog(admin.id); setNewPassword(''); }}
-                    title={isAr ? 'تغيير كلمة المرور' : 'Change Password'}
-                  >
+                  <Button variant="ghost" size="icon" onClick={() => { setPasswordDialog(admin.id); setNewPassword(''); }}
+                    title={isAr ? 'تغيير كلمة المرور' : 'Change Password'}>
                     <KeyRound className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" onClick={() => handleDelete(admin.id)}
+                    title={isAr ? 'حذف' : 'Delete'}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
                 </div>
               </div>
@@ -259,64 +340,32 @@ const AdminManagement: React.FC<Props> = ({ universities, colleges, departments 
               <Label>{isAr ? 'كلمة المرور' : 'Password'} *</Label>
               <Input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} />
             </div>
-            <div className="space-y-1">
-              <Label>{isAr ? 'الدور' : 'Role'} *</Label>
-              <Select value={form.role} onValueChange={v => setForm({ ...form, role: v, university_id: '', college_id: '', department_id: '' })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {availableRoles().map(r => (
-                    <SelectItem key={r} value={r}>{getRoleName(r)}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {(form.role === 'university_admin' || form.role === 'college_admin' || form.role === 'department_admin') && role === 'super_admin' && (
-              <div className="space-y-1">
-                <Label>{isAr ? 'الجامعة' : 'University'}</Label>
-                <Select value={form.university_id} onValueChange={v => setForm({ ...form, university_id: v, college_id: '', department_id: '' })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {universities.map(u => (
-                      <SelectItem key={u.id} value={u.id}>{isAr ? u.name_ar : (u.name_en || u.name_ar)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {(form.role === 'college_admin' || form.role === 'department_admin') && (
-              <div className="space-y-1">
-                <Label>{isAr ? 'الكلية' : 'College'}</Label>
-                <Select value={form.college_id} onValueChange={v => setForm({ ...form, college_id: v, department_id: '' })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {filteredColleges.map(c => (
-                      <SelectItem key={c.id} value={c.id}>{isAr ? c.name_ar : (c.name_en || c.name_ar)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {form.role === 'department_admin' && (
-              <div className="space-y-1">
-                <Label>{isAr ? 'القسم' : 'Department'}</Label>
-                <Select value={form.department_id} onValueChange={v => setForm({ ...form, department_id: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {filteredDepartments.map(d => (
-                      <SelectItem key={d.id} value={d.id}>{isAr ? d.name_ar : (d.name_en || d.name_ar)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
+            {renderRoleFields(form, setForm, filteredColleges, filteredDepartments)}
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setDialogOpen(false)}>{isAr ? 'إلغاء' : 'Cancel'}</Button>
-              <Button onClick={handleCreate} disabled={loading} className="bg-gold text-gold-foreground">
+              <Button onClick={handleCreate} disabled={loading} className="bg-accent text-accent-foreground">
                 {loading ? (isAr ? 'جاري الإنشاء...' : 'Creating...') : (isAr ? 'إنشاء' : 'Create')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Role Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{isAr ? 'تعديل دور المدير' : 'Edit Admin Role'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {editingAdmin?.profiles?.full_name || (isAr ? 'بدون اسم' : 'No name')}
+            </p>
+            {renderRoleFields(editForm, setEditForm, editFilteredColleges, editFilteredDepartments)}
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>{isAr ? 'إلغاء' : 'Cancel'}</Button>
+              <Button onClick={handleEditSave} disabled={loading} className="bg-accent text-accent-foreground">
+                {loading ? (isAr ? 'جاري الحفظ...' : 'Saving...') : (isAr ? 'حفظ' : 'Save')}
               </Button>
             </div>
           </div>
@@ -336,7 +385,7 @@ const AdminManagement: React.FC<Props> = ({ universities, colleges, departments 
             </div>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setPasswordDialog(null)}>{isAr ? 'إلغاء' : 'Cancel'}</Button>
-              <Button onClick={handleChangePassword} className="bg-gold text-gold-foreground">{isAr ? 'تغيير' : 'Change'}</Button>
+              <Button onClick={handleChangePassword} className="bg-accent text-accent-foreground">{isAr ? 'تغيير' : 'Change'}</Button>
             </div>
           </div>
         </DialogContent>

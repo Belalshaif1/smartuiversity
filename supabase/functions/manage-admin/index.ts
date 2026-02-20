@@ -15,7 +15,6 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
 
-    // Verify caller auth
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -27,7 +26,6 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
-    // Get caller role
     const { data: callerRoles } = await supabaseAdmin.from('user_roles').select('*').eq('user_id', caller.id)
     const callerRole = callerRoles?.[0]
     if (!callerRole) {
@@ -37,10 +35,17 @@ Deno.serve(async (req) => {
     const body = await req.json()
     const { action } = body
 
+    // Helper: check if caller can manage target role
+    const canManageTarget = (targetRole: any) => {
+      if (callerRole.role === 'super_admin') return true
+      if (callerRole.role === 'university_admin' && callerRole.university_id === targetRole.university_id && ['college_admin', 'department_admin'].includes(targetRole.role)) return true
+      if (callerRole.role === 'college_admin' && callerRole.college_id === targetRole.college_id && targetRole.role === 'department_admin') return true
+      return false
+    }
+
     if (action === 'create') {
       const { email, password, full_name, role, university_id, college_id, department_id } = body
 
-      // Permission checks
       if (callerRole.role === 'super_admin') {
         if (!['university_admin', 'college_admin', 'department_admin'].includes(role)) {
           return new Response(JSON.stringify({ error: 'Invalid role' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -63,7 +68,6 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: 'No permission' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
-      // Create user
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email,
         password,
@@ -75,7 +79,6 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: createError.message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
-      // Assign role
       const { error: roleError } = await supabaseAdmin.from('user_roles').insert({
         user_id: newUser.user.id,
         role,
@@ -94,25 +97,17 @@ Deno.serve(async (req) => {
     } else if (action === 'toggle_active') {
       const { role_id, is_active } = body
 
-      // Get the target role
       const { data: targetRole } = await supabaseAdmin.from('user_roles').select('*').eq('id', role_id).single()
       if (!targetRole) {
         return new Response(JSON.stringify({ error: 'Role not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
-      // Permission check
-      let allowed = false
-      if (callerRole.role === 'super_admin') allowed = true
-      else if (callerRole.role === 'university_admin' && callerRole.university_id === targetRole.university_id && ['college_admin', 'department_admin'].includes(targetRole.role)) allowed = true
-      else if (callerRole.role === 'college_admin' && callerRole.college_id === targetRole.college_id && targetRole.role === 'department_admin') allowed = true
-
-      if (!allowed) {
+      if (!canManageTarget(targetRole)) {
         return new Response(JSON.stringify({ error: 'No permission' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
-      // Also ban/unban the user in auth
       const { error: banError } = await supabaseAdmin.auth.admin.updateUserById(targetRole.user_id, {
-        ban_duration: is_active ? 'none' : '876000h', // ~100 years ban
+        ban_duration: is_active ? 'none' : '876000h',
       })
 
       if (banError) {
@@ -135,18 +130,75 @@ Deno.serve(async (req) => {
         return new Response(JSON.stringify({ error: 'Role not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
-      let allowed = false
-      if (callerRole.role === 'super_admin') allowed = true
-      else if (callerRole.role === 'university_admin' && callerRole.university_id === targetRole.university_id && ['college_admin', 'department_admin'].includes(targetRole.role)) allowed = true
-      else if (callerRole.role === 'college_admin' && callerRole.college_id === targetRole.college_id && targetRole.role === 'department_admin') allowed = true
-
-      if (!allowed) {
+      if (!canManageTarget(targetRole)) {
         return new Response(JSON.stringify({ error: 'No permission' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
       const { error } = await supabaseAdmin.auth.admin.updateUserById(targetRole.user_id, { password: new_password })
       if (error) {
         return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
+    } else if (action === 'update_role') {
+      const { role_id, role, university_id, college_id, department_id } = body
+
+      const { data: targetRole } = await supabaseAdmin.from('user_roles').select('*').eq('id', role_id).single()
+      if (!targetRole) {
+        return new Response(JSON.stringify({ error: 'Role not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+
+      if (!canManageTarget(targetRole)) {
+        return new Response(JSON.stringify({ error: 'No permission' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+
+      // Validate new role assignment
+      if (callerRole.role === 'university_admin' && !['college_admin', 'department_admin'].includes(role)) {
+        return new Response(JSON.stringify({ error: 'Cannot assign this role' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+      if (callerRole.role === 'college_admin' && role !== 'department_admin') {
+        return new Response(JSON.stringify({ error: 'Cannot assign this role' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+
+      const { error } = await supabaseAdmin.from('user_roles').update({
+        role,
+        university_id: university_id || null,
+        college_id: college_id || null,
+        department_id: department_id || null,
+      }).eq('id', role_id)
+
+      if (error) {
+        return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+
+      return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+
+    } else if (action === 'delete_user') {
+      const { role_id } = body
+
+      const { data: targetRole } = await supabaseAdmin.from('user_roles').select('*').eq('id', role_id).single()
+      if (!targetRole) {
+        return new Response(JSON.stringify({ error: 'Role not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+
+      if (!canManageTarget(targetRole)) {
+        return new Response(JSON.stringify({ error: 'No permission' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+
+      // Delete the role first
+      const { error: roleDeleteError } = await supabaseAdmin.from('user_roles').delete().eq('id', role_id)
+      if (roleDeleteError) {
+        return new Response(JSON.stringify({ error: roleDeleteError.message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+
+      // Delete profile
+      await supabaseAdmin.from('profiles').delete().eq('user_id', targetRole.user_id)
+
+      // Delete auth user
+      const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(targetRole.user_id)
+      if (deleteError) {
+        return new Response(JSON.stringify({ error: deleteError.message }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
       }
 
       return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
