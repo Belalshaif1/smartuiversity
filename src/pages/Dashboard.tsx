@@ -112,14 +112,16 @@ const Dashboard: React.FC = () => {
           await supabase.from('universities').insert(payload);
         }
       } else if (activeForm === 'college') {
-        const payload = { name_ar: formData.name_ar, name_en: formData.name_en, description_ar: formData.description_ar, description_en: formData.description_en, university_id: formData.university_id };
+        const universityId = role === 'university_admin' ? userRole.university_id : formData.university_id;
+        const payload = { name_ar: formData.name_ar, name_en: formData.name_en, description_ar: formData.description_ar, description_en: formData.description_en, university_id: universityId };
         if (editId) {
           await supabase.from('colleges').update(payload).eq('id', editId);
         } else {
           await supabase.from('colleges').insert(payload);
         }
       } else if (activeForm === 'department') {
-        const payload = { name_ar: formData.name_ar, name_en: formData.name_en, description_ar: formData.description_ar, description_en: formData.description_en, college_id: formData.college_id };
+        const collegeId = role === 'college_admin' ? userRole.college_id : formData.college_id;
+        const payload = { name_ar: formData.name_ar, name_en: formData.name_en, description_ar: formData.description_ar, description_en: formData.description_en, college_id: collegeId };
         if (editId) {
           await supabase.from('departments').update(payload).eq('id', editId);
         } else {
@@ -217,9 +219,9 @@ const Dashboard: React.FC = () => {
       case 'university':
         return <>{f('name_ar', t('common.name_ar'), 'text', true)}{f('name_en', t('common.name_en'))}{f('description_ar', t('common.description_ar'), 'textarea')}{f('description_en', t('common.description_en'), 'textarea')}</>;
       case 'college':
-        return <>{selectField('university_id', t('nav.universities'), universities)}{f('name_ar', t('common.name_ar'), 'text', true)}{f('name_en', t('common.name_en'))}{f('description_ar', t('common.description_ar'), 'textarea')}</>;
+        return <>{role === 'super_admin' && selectField('university_id', t('nav.universities'), universities)}{f('name_ar', t('common.name_ar'), 'text', true)}{f('name_en', t('common.name_en'))}{f('description_ar', t('common.description_ar'), 'textarea')}</>;
       case 'department':
-        return <>{selectField('college_id', t('nav.universities') + ' > ' + t('universities.colleges'), colleges)}{f('name_ar', t('common.name_ar'), 'text', true)}{f('name_en', t('common.name_en'))}{f('description_ar', t('common.description_ar'), 'textarea')}</>;
+        return <>{role === 'super_admin' && selectField('college_id', t('nav.universities') + ' > ' + t('universities.colleges'), colleges)}{role === 'university_admin' && selectField('college_id', t('universities.colleges'), colleges)}{f('name_ar', t('common.name_ar'), 'text', true)}{f('name_en', t('common.name_en'))}{f('description_ar', t('common.description_ar'), 'textarea')}</>;
       case 'announcement':
         return <>{f('title_ar', t('common.name_ar'), 'text', true)}{f('title_en', t('common.name_en'))}{f('content_ar', t('common.description_ar'), 'textarea', true)}{f('content_en', t('common.description_en'), 'textarea')}</>;
       case 'graduate':
@@ -280,9 +282,9 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Management Tabs */}
-      <Tabs defaultValue="users">
+      <Tabs defaultValue={role === 'super_admin' ? 'users' : 'admins'}>
         <TabsList className="flex flex-wrap gap-1 h-auto mb-6">
-          {(role === 'super_admin' || role === 'university_admin' || role === 'college_admin') && <TabsTrigger value="users"><Users className="h-4 w-4 me-1" />{language === 'ar' ? 'إدارة المستخدمين' : 'User Management'}</TabsTrigger>}
+          {role === 'super_admin' && <TabsTrigger value="users"><Users className="h-4 w-4 me-1" />{language === 'ar' ? 'إدارة المستخدمين' : 'User Management'}</TabsTrigger>}
           {(role === 'super_admin' || role === 'university_admin' || role === 'college_admin') && <TabsTrigger value="admins"><UserCog className="h-4 w-4 me-1" />{t('dashboard.manage_admins')}</TabsTrigger>}
           {role === 'super_admin' && <TabsTrigger value="permissions"><Shield className="h-4 w-4 me-1" />{language === 'ar' ? 'الأدوار والصلاحيات' : 'Roles & Permissions'}</TabsTrigger>}
           {role === 'super_admin' && <TabsTrigger value="universities"><Building2 className="h-4 w-4 me-1" />{t('nav.universities')}</TabsTrigger>}
@@ -296,7 +298,7 @@ const Dashboard: React.FC = () => {
         </TabsList>
 
         {/* User Management */}
-        {(role === 'super_admin' || role === 'university_admin' || role === 'college_admin') && (
+        {role === 'super_admin' && (
           <TabsContent value="users">
             <UserManagementTable onAddAdmin={() => {
               const adminsTab = document.querySelector('[data-value="admins"]') as HTMLElement;

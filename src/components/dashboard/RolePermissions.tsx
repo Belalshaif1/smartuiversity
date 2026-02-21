@@ -75,15 +75,21 @@ const RolePermissions: React.FC = () => {
 
   const handleSave = async () => {
     setSaving(true);
-    const toUpdate = permissions.filter(p => modified.has(p.id));
-    for (const p of toUpdate) {
-      await supabase
-        .from('role_permissions')
-        .update({ is_enabled: p.is_enabled })
-        .eq('id', p.id);
+    try {
+      const toUpdate = permissions.filter(p => modified.has(p.id));
+      for (const p of toUpdate) {
+        const { error } = await supabase
+          .from('role_permissions')
+          .update({ is_enabled: p.is_enabled })
+          .eq('id', p.id);
+        if (error) throw error;
+      }
+      setModified(new Set());
+      toast({ title: isAr ? 'تم حفظ الصلاحيات' : 'Permissions saved' });
+    } catch (err: any) {
+      console.error('Save permissions error:', err);
+      toast({ title: isAr ? 'فشل حفظ الصلاحيات' : 'Failed to save permissions', description: err.message, variant: 'destructive' });
     }
-    setModified(new Set());
-    toast({ title: isAr ? 'تم حفظ الصلاحيات' : 'Permissions saved' });
     setSaving(false);
   };
 
