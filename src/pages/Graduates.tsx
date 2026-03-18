@@ -27,7 +27,9 @@ const Graduates: React.FC = () => {
         <GraduationCap className="h-8 w-8 text-gold" />
         {t('graduates.title')}
       </h1>
-      {graduates.length > 0 ? (
+      {loading ? (
+        <p className="text-center text-muted-foreground py-12">{t('common.loading')}</p>
+      ) : graduates.length > 0 ? (
         <Card>
           <CardContent className="p-0">
             <Table>

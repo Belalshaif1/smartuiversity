@@ -27,7 +27,9 @@ const Fees: React.FC = () => {
         <DollarSign className="h-8 w-8 text-gold" />
         {t('fees.title')}
       </h1>
-      {fees.length > 0 ? (
+      {loading ? (
+        <p className="text-center text-muted-foreground py-12">{t('common.loading')}</p>
+      ) : fees.length > 0 ? (
         <Card>
           <CardContent className="p-0">
             <Table>

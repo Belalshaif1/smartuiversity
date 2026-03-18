@@ -205,8 +205,12 @@ const Dashboard: React.FC = () => {
   };
 
   const handleDelete = async (table: 'universities' | 'colleges' | 'departments' | 'announcements' | 'graduates' | 'research' | 'jobs' | 'fees', id: string) => {
-    if (!confirm(t('common.confirm_delete'))) return;
-    await (supabase.from(table) as any).delete().eq('id', id);
+    if (!window.confirm(t('common.confirm_delete'))) return;
+    const { error } = await (supabase.from(table) as any).delete().eq('id', id);
+    if (error) {
+      toast({ title: error.message, variant: 'destructive' });
+      return;
+    }
     toast({ title: language === 'ar' ? 'تم الحذف' : 'Deleted' });
     fetchData();
   };

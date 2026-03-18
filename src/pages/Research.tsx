@@ -49,7 +49,8 @@ const Research: React.FC = () => {
             </CardContent>
           </Card>
         ))}
-        {research.length === 0 && <p className="col-span-full text-center text-muted-foreground py-12">{t('research.no_research')}</p>}
+        {loading && <p className="col-span-full text-center text-muted-foreground py-12">{t('common.loading')}</p>}
+        {!loading && research.length === 0 && <p className="col-span-full text-center text-muted-foreground py-12">{t('research.no_research')}</p>}
       </div>
     </div>
   );
