@@ -104,70 +104,103 @@ const Dashboard: React.FC = () => {
 
   const handleSave = async () => {
     try {
+      let result: { error: any } = { error: null };
+      const currentRole = userRole?.role;
+
       if (activeForm === 'university') {
         const payload = { name_ar: formData.name_ar, name_en: formData.name_en, description_ar: formData.description_ar, description_en: formData.description_en };
         if (editId) {
-          await supabase.from('universities').update(payload).eq('id', editId);
+          result = await supabase.from('universities').update(payload).eq('id', editId);
         } else {
-          await supabase.from('universities').insert(payload);
+          result = await supabase.from('universities').insert(payload);
         }
       } else if (activeForm === 'college') {
-        const universityId = role === 'university_admin' ? userRole.university_id : formData.university_id;
+        const universityId = currentRole === 'university_admin' ? userRole!.university_id : formData.university_id;
+        if (!universityId) {
+          toast({ title: language === 'ar' ? 'يرجى اختيار الجامعة' : 'Please select a university', variant: 'destructive' });
+          return;
+        }
         const payload = { name_ar: formData.name_ar, name_en: formData.name_en, description_ar: formData.description_ar, description_en: formData.description_en, university_id: universityId };
         if (editId) {
-          await supabase.from('colleges').update(payload).eq('id', editId);
+          result = await supabase.from('colleges').update(payload).eq('id', editId);
         } else {
-          await supabase.from('colleges').insert(payload);
+          result = await supabase.from('colleges').insert(payload);
         }
       } else if (activeForm === 'department') {
-        const collegeId = role === 'college_admin' ? userRole.college_id : formData.college_id;
+        const collegeId = currentRole === 'college_admin' ? userRole!.college_id : formData.college_id;
+        if (!collegeId) {
+          toast({ title: language === 'ar' ? 'يرجى اختيار الكلية' : 'Please select a college', variant: 'destructive' });
+          return;
+        }
         const payload = { name_ar: formData.name_ar, name_en: formData.name_en, description_ar: formData.description_ar, description_en: formData.description_en, college_id: collegeId };
         if (editId) {
-          await supabase.from('departments').update(payload).eq('id', editId);
+          result = await supabase.from('departments').update(payload).eq('id', editId);
         } else {
-          await supabase.from('departments').insert(payload);
+          result = await supabase.from('departments').insert(payload);
         }
       } else if (activeForm === 'announcement') {
         const payload = { title_ar: formData.title_ar, title_en: formData.title_en, content_ar: formData.content_ar, content_en: formData.content_en, scope: formData.scope || 'global', university_id: formData.university_id || null, college_id: formData.college_id || null, created_by: user!.id };
         if (editId) {
-          await supabase.from('announcements').update(payload).eq('id', editId);
+          result = await supabase.from('announcements').update(payload).eq('id', editId);
         } else {
-          await supabase.from('announcements').insert(payload);
+          result = await supabase.from('announcements').insert(payload);
         }
       } else if (activeForm === 'graduate') {
+        if (!formData.department_id) {
+          toast({ title: language === 'ar' ? 'يرجى اختيار القسم' : 'Please select a department', variant: 'destructive' });
+          return;
+        }
         const payload = { full_name_ar: formData.full_name_ar, full_name_en: formData.full_name_en, department_id: formData.department_id, graduation_year: parseInt(formData.graduation_year), gpa: formData.gpa ? parseFloat(formData.gpa) : null, specialization_ar: formData.specialization_ar, specialization_en: formData.specialization_en };
         if (editId) {
-          await supabase.from('graduates').update(payload).eq('id', editId);
+          result = await supabase.from('graduates').update(payload).eq('id', editId);
         } else {
-          await supabase.from('graduates').insert(payload);
+          result = await supabase.from('graduates').insert(payload);
         }
       } else if (activeForm === 'research') {
+        if (!formData.department_id) {
+          toast({ title: language === 'ar' ? 'يرجى اختيار القسم' : 'Please select a department', variant: 'destructive' });
+          return;
+        }
         const payload = { title_ar: formData.title_ar, title_en: formData.title_en, abstract_ar: formData.abstract_ar, abstract_en: formData.abstract_en, author_name: formData.author_name, department_id: formData.department_id, published: formData.published !== false };
         if (editId) {
-          await supabase.from('research').update(payload).eq('id', editId);
+          result = await supabase.from('research').update(payload).eq('id', editId);
         } else {
-          await supabase.from('research').insert(payload);
+          result = await supabase.from('research').insert(payload);
         }
       } else if (activeForm === 'job') {
+        if (!formData.college_id) {
+          toast({ title: language === 'ar' ? 'يرجى اختيار الكلية' : 'Please select a college', variant: 'destructive' });
+          return;
+        }
         const payload = { title_ar: formData.title_ar, title_en: formData.title_en, description_ar: formData.description_ar, description_en: formData.description_en, college_id: formData.college_id, deadline: formData.deadline || null };
         if (editId) {
-          await supabase.from('jobs').update(payload).eq('id', editId);
+          result = await supabase.from('jobs').update(payload).eq('id', editId);
         } else {
-          await supabase.from('jobs').insert(payload);
+          result = await supabase.from('jobs').insert(payload);
         }
       } else if (activeForm === 'fee') {
+        if (!formData.department_id) {
+          toast({ title: language === 'ar' ? 'يرجى اختيار القسم' : 'Please select a department', variant: 'destructive' });
+          return;
+        }
         const payload = { department_id: formData.department_id, fee_type: formData.fee_type || 'public', amount: parseFloat(formData.amount), academic_year: formData.academic_year };
         if (editId) {
-          await supabase.from('fees').update(payload).eq('id', editId);
+          result = await supabase.from('fees').update(payload).eq('id', editId);
         } else {
-          await supabase.from('fees').insert(payload);
+          result = await supabase.from('fees').insert(payload);
         }
       }
+
+      if (result.error) {
+        toast({ title: result.error.message, variant: 'destructive' });
+        return;
+      }
+
       toast({ title: language === 'ar' ? 'تم الحفظ بنجاح' : 'Saved successfully' });
       setDialogOpen(false);
       fetchData();
     } catch (err: any) {
-      toast({ title: err.message, variant: 'destructive' });
+      toast({ title: err.message || 'An error occurred', variant: 'destructive' });
     }
   };
 

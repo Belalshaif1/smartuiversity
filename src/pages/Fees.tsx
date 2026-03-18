@@ -9,10 +9,16 @@ const Fees: React.FC = () => {
   const { t, language } = useLanguage();
   const [fees, setFees] = useState<any[]>([]);
 
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     supabase.from('fees').select('*, departments(name_ar, name_en, colleges(name_ar, name_en))')
       .order('created_at', { ascending: false })
-      .then(({ data }) => setFees(data || []));
+      .then(({ data, error }) => {
+        if (error) console.error('Fees fetch error:', error);
+        setFees(data || []);
+        setLoading(false);
+      });
   }, []);
 
   return (

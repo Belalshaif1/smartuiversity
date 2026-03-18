@@ -9,10 +9,16 @@ const Graduates: React.FC = () => {
   const { t, language } = useLanguage();
   const [graduates, setGraduates] = useState<any[]>([]);
 
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     supabase.from('graduates').select('*, departments(name_ar, name_en)')
       .order('graduation_year', { ascending: false })
-      .then(({ data }) => setGraduates(data || []));
+      .then(({ data, error }) => {
+        if (error) console.error('Graduates fetch error:', error);
+        setGraduates(data || []);
+        setLoading(false);
+      });
   }, []);
 
   return (
