@@ -9,10 +9,16 @@ const Research: React.FC = () => {
   const { t, language } = useLanguage();
   const [research, setResearch] = useState<any[]>([]);
 
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     supabase.from('research').select('*, departments(name_ar, name_en)')
       .eq('published', true).order('created_at', { ascending: false })
-      .then(({ data }) => setResearch(data || []));
+      .then(({ data, error }) => {
+        if (error) console.error('Research fetch error:', error);
+        setResearch(data || []);
+        setLoading(false);
+      });
   }, []);
 
   return (
@@ -43,7 +49,8 @@ const Research: React.FC = () => {
             </CardContent>
           </Card>
         ))}
-        {research.length === 0 && <p className="col-span-full text-center text-muted-foreground py-12">{t('research.no_research')}</p>}
+        {loading && <p className="col-span-full text-center text-muted-foreground py-12">{t('common.loading')}</p>}
+        {!loading && research.length === 0 && <p className="col-span-full text-center text-muted-foreground py-12">{t('research.no_research')}</p>}
       </div>
     </div>
   );

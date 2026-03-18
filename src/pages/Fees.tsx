@@ -9,10 +9,16 @@ const Fees: React.FC = () => {
   const { t, language } = useLanguage();
   const [fees, setFees] = useState<any[]>([]);
 
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     supabase.from('fees').select('*, departments(name_ar, name_en, colleges(name_ar, name_en))')
       .order('created_at', { ascending: false })
-      .then(({ data }) => setFees(data || []));
+      .then(({ data, error }) => {
+        if (error) console.error('Fees fetch error:', error);
+        setFees(data || []);
+        setLoading(false);
+      });
   }, []);
 
   return (
@@ -21,7 +27,9 @@ const Fees: React.FC = () => {
         <DollarSign className="h-8 w-8 text-gold" />
         {t('fees.title')}
       </h1>
-      {fees.length > 0 ? (
+      {loading ? (
+        <p className="text-center text-muted-foreground py-12">{t('common.loading')}</p>
+      ) : fees.length > 0 ? (
         <Card>
           <CardContent className="p-0">
             <Table>
